@@ -1,48 +1,51 @@
 <?php
 
 require_once 'includes/common.inc.php';
+$keyPath=$_GET['key'];
 
-$maxDepth=2;
-$depth=1;
 
 // Get keys from Redis according to server-config.
-$keys = $redis->keys($server['filter']);
+$keys = $redis->keys($keyPath."*");
+
 sort($keys);
 $namespaces = array(); // Array to hold our top namespaces.
+
 // Build an array of nested arrays containing all our namespaces and containing keys.
 foreach ($keys as $key) {
+  // Ignore keys that are to long (Redis supports keys that can be way to long to put in an url).
+  if (strlen($key) > $config['maxkeylen']) {
+    continue;
+  }
+
   $key = explode($config['seperator'], $key);
-  $k=$key[0];
-  unset($key);
-  if(!isset($namespaces[$k])){
-  	$namespaces[$k]=0;
+
+  // $d will be a reference to the current namespace.
+  $d = &$namespaces;
+
+  // We loop though all the namespaces for this key creating the array for each.
+  // Each time updating $d to be a reference to the last namespace so we can create the next one in it.
+  for ($i = 0; $i < (count($key) - 1); ++$i) {
+    if (!isset($d[$key[$i]])) {
+      $d[$key[$i]] = array();
+    }
+
+    $d = &$d[$key[$i]];
   }
-	$namespaces[$k]++;
+
+  // Nodes containing an item named __phpredisadmin__ are also a key, not just a directory.
+  // This means that creating an actual key named __phpredisadmin__ will make this bug.
+  $d[$key[count($key) - 1]] = array('__phpredisadmin__' => true);
+
+  // Unset $d so we don't accidentally overwrite it somewhere else.
+  unset($d);
 }
-unset($keys);
-// This is basically the same as the click code in index.js.
-// Just build the url for the frame based on our own url.
-if (count($_GET) == 0) {
-  $iframe = 'overview.php';
-} else {
-  $iframe = substr($_SERVER['REQUEST_URI'], strpos($_SERVER['REQUEST_URI'], '?') + 1);
-
-  if (strpos($iframe, '&') !== false) {
-    $iframe = substr_replace($iframe, '.php?', strpos($iframe, '&'), 1);
-  } else {
-    $iframe .= '.php';
-  }
-}
-
-
-
-
 
 
 // Recursive function used to print the namespaces.
 function print_namespace($item, $name, $fullkey, $islast) {
-  global $config, $server, $redis,$depth,$maxDepth;
+  global $config, $server, $redis,$depth,$maxDepth,$keyPath;
 	$depth=count(explode($config['seperator'], $fullkey));
+	
   // Is this also a key and not just a namespace?
   if (isset($item['__phpredisadmin__'])) {
     // Unset it so we won't loop over it when printing this namespace.
@@ -92,13 +95,17 @@ function print_namespace($item, $name, $fullkey, $islast) {
 
   // Does this namespace also contain subkeys?
   if (count($item) > 0) {
+    if($fullkey!=$keyPath){
     ?>
     <li class="folder<?php echo empty($fullkey) ? '' : ' collapsed'?><?php echo $islast ? ' last' : ''?>" title="<?php echo urlencode($fullkey)?>">
+    <?php
+  	}
+    ?>
     <div class="icon"><?php echo format_html($name)?>&nbsp;<span class="info">(<?php echo count($item)?>)</span>
     <?php if (!empty($fullkey)) { ?><a href="delete.php?s=<?php echo $server['id']?>&amp;tree=<?php echo urlencode($fullkey)?>:" class="deltree"><img src="images/delete.png" width="10" height="10" title="Delete tree" alt="[X]"></a><?php } ?>
     </div><ul>
     <?php
-		if($depth<=$maxDepth && is_array($item)){
+		if($depth<$maxDepth){
     $l = count($item);
 
     foreach ($item as $childname => $childitem) {
@@ -113,63 +120,22 @@ function print_namespace($item, $name, $fullkey, $islast) {
     }
   }
     ?>
-    </ul>
+    </ul><?php
+    if($fullkey!=$keyPath){
+    ?>
     </li>
     <?php
+  	}
   }
 }
 
-
-
-
-$page['css'][] = 'index';
-$page['js'][]  = 'index';
-
-require 'includes/header.inc.php';
-
-?>
-<div id="sidebar">
-
-<h1 class="logo"><a href="?overview&amp;s=<?php echo $server['id']?>">phpRedisAdmin</a></h1>
-
-<p>
-<select id="server">
-<?php foreach ($config['servers'] as $i => $srv) { ?>
-<option value="<?php echo $i?>" <?php echo ($server['id'] == $i) ? 'selected="selected"' : ''?>><?php echo isset($srv['name']) ? format_html($srv['name']) : $srv['host'].':'.$srv['port']?></option>
-<?php } ?>
-</select>
-</p>
-
-<p>
-<?php if (isset($login)) { ?>
-<a href="logout.php"><img src="images/logout.png" width="16" height="16" title="Logout" alt="[L]"></a>
-<?php } ?>
-<a href="?info&amp;s=<?php echo $server['id']?>"><img src="images/info.png" width="16" height="16" title="Info" alt="[I]"></a>
-<a href="?export&amp;s=<?php echo $server['id']?>"><img src="images/export.png" width="16" height="16" title="Export" alt="[E]"></a>
-<a href="?import&amp;s=<?php echo $server['id']?>"><img src="images/import.png" width="16" height="16" title="Import" alt="[I]"></a>
-</p>
-
-<p>
-<a href="?edit&amp;s=<?php echo $server['id']?>" class="add">Add another key</a>
-</p>
-
-<p>
-<input type="text" id="filter" size="24" value="type here to filter" class="info">
-</p>
-
-<div id="keys">
-<ul>
-<?php print_namespace($namespaces, 'Keys', '', empty($namespaces))?>
-</ul>
-</div><!-- #keys -->
-
-<div id="frame">
-<iframe src="<?php echo format_html($iframe)?>" id="iframe" frameborder="0" scrolling="0"></iframe>
-</div><!-- #frame -->
-
-</div><!-- #sidebar -->
-<?php
-
-require 'includes/footer.inc.php';
-
+$ks = explode($config['seperator'], $keyPath);
+$keyName="";
+foreach($ks as $k){
+	$keyName=$k;
+	$namespaces=$namespaces[$keyName];
+}
+$maxDepth=count($ks)+1;
+$depth=1;
+print_namespace($namespaces, $keyName, $keyPath, empty($namespaces));
 ?>

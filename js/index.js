@@ -36,26 +36,7 @@ $(function() {
   });
 
 
-  $('li.current').parents('li.folder').removeClass('collapsed');
-
-  $('li.folder').click(function(e) {
-    var t = $(this);
-
-    if ((e.pageY >= t.offset().top) &&
-        (e.pageY <= t.offset().top + t.children('div').height())) {
-      e.stopPropagation();
-      t.toggleClass('collapsed');
-    }
-  });
-
-  $('a').click(function() {
-    $('li.current').removeClass('current');
-  });
-
-  $('li a').click(function() {
-    $(this).parent().addClass('current');
-  });
-
+  
 
   $('#filter').focus(function() {
     if ($(this).hasClass('info')) {
@@ -83,8 +64,40 @@ $(function() {
       }
     });
   });
+	setupTree();
+  
+});
 
-  $('.deltree').click(function(e) {
+
+function setupTree(){
+	$('li.current').parents('li.folder').removeClass('collapsed');
+
+  $('li.folder').click(function(e) {
+    var t = $(this);
+		if(t.hasClass('collapsed')){
+			//$(this).html("<img src='images/waiting.gif' />");
+			$(this).ajaxStart(function(){
+		   $(this).children('icon').append("<img src='images/waiting.gif' class='waiting'/>");
+		 	});
+	    $(this).load("keys.php?key="+$(this).attr("title"), function(){
+	   			setupTree();
+	 		});
+ 		}
+    if ((e.pageY >= t.offset().top) &&
+        (e.pageY <= t.offset().top + t.children('div').height())) {
+      //e.stopPropagation();
+      t.toggleClass('collapsed');
+    }
+  });
+
+  $('a').click(function() {
+    $('li.current').removeClass('current');
+  });
+
+  $('li a').click(function() {
+    $(this).parent().addClass('current');
+  });
+	$('.deltree').click(function(e) {
     e.preventDefault();
 
     if (confirm('Are you sure you want to delete this whole tree and all it\'s keys?')) {
@@ -98,5 +111,5 @@ $(function() {
       });
     }
   });
-});
-
+	
+}

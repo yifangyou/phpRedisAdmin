@@ -11,6 +11,15 @@ You can send comments, patches, questions
 or to erik@dubbelboer.com.
 
 
+additional functions
+====================
+2013-08-01 11:43:03
+When redis reach 1000+ keys,phpRedisAdmin will cause brower slow.
+When redis reach 6000+ keys,phpRedisAdmin will cause brower crash.
+I modify phpRedisAdmin's the key tree,it will load from ajax by level.
+It has some problems when one level's keys too many.   
+
+
 Example
 =======
 
